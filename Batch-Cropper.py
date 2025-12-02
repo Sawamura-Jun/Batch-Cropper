@@ -622,23 +622,27 @@ class PreviewPanel(wx.Panel):
         width, height = pil_image.size
         if width <= 0 or height <= 0:
             return False
-       
-        # pil image → wx image 変換
-        wximage = self.pil_to_wx_image(pil_image)
 
-        if self.clip.Open():
-            bitmap_clip = wx.BitmapDataObject()     #毎回インスタンス化必要
-            bitmap = wximage.ConvertToBitmap()
-            bitmap_clip.SetBitmap(bitmap)
-            self.clip.SetData(bitmap_clip)
-            del bitmap_clip, bitmap
-            self.clip.Close()
+        pil_image = ImageOps.exif_transpose(pil_image)
+
+        buffer = io.BytesIO()
+        # Always encode as PNG for clipboard use
+        pil_image.save(buffer, format="PNG")
+        png_bytes = buffer.getvalue()
+        buffer.close()
+
+        if not self.clip.Open():
+            print('Clipbord not open')
+            return False
+
+        try:
+            data_object = wx.CustomDataObject(wx.DataFormat(wx.DF_PNG))
+            data_object.SetData(png_bytes)
+            self.clip.SetData(data_object)
             print('Copy to clipboard')
             return True
-        else:
-            print('Clipbord not open')
-
-        return False
+        finally:
+            self.clip.Close()
 
     def InitCropRect(self):
         disp_w = self.display_w
@@ -1097,9 +1101,17 @@ class MainFrame(wx.Frame):
 
 
     def OnCopyPreviewOriginal(self, evt):
+        if not (0 <= self.selected_index < len(self.file_paths)):
+            wx.LogWarning('コピー対象のプレビュー画像がありません。')
+            return
+
+        ext = os.path.splitext(self.file_paths[self.selected_index])[1].lower()
+        if ext in ('.jpg', '.jpeg'):
+            wx.MessageBox("容量が増えるためJpeg画像はクリップボードにコピーできません", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
+            return
+
         if not self.preview.CopyOriginalToClipboard():
             wx.LogWarning('コピー対象のプレビュー画像がありません。')
-
 
     def OnSelectThumbnail(self, idx):
         self.selected_index = idx
