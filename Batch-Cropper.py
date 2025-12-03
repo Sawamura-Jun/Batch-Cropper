@@ -875,6 +875,10 @@ class ControlPanel(wx.Panel):
         b2.Bind(wx.EVT_BUTTON,lambda e:main.OnTrimAll())
         s.Add(b1,0,wx.ALL|wx.EXPAND,10)
         s.Add(b2,0,wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND,10)
+        b_png_reduce = wx.Button(self, label="PNG減色", size=(100,45))
+        b_png_reduce.SetFont(font)
+        b_png_reduce.Bind(wx.EVT_BUTTON, lambda e: main.OnPngReduce())
+        s.Add(b_png_reduce,0,wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND,10)
         b3 = wx.Button(self, label="スナップショット", size=(100,45))
         b3.SetFont(font)
         b3.Bind(wx.EVT_BUTTON, lambda e: main.OnSnapshot())
@@ -1182,6 +1186,11 @@ class MainFrame(wx.Frame):
         self.PushHistory()
         self.UpdateUI()
         # （必要なら logs をファイル出力 or ダイアログ表示）
+
+
+    def OnPngReduce(self):
+        """PNG 減色機能のプレースホルダー"""
+        wx.MessageBox("PNG減色はまだ実装されていません。", "情報", wx.OK | wx.ICON_INFORMATION)
 
 
     def OnSnapshot(self):
