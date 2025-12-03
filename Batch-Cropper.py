@@ -639,6 +639,7 @@ class PreviewPanel(wx.Panel):
             data_object = wx.CustomDataObject(wx.DataFormat(wx.DF_PNG))
             data_object.SetData(png_bytes)
             self.clip.SetData(data_object)
+            self.clip.Flush()
             print('Copy to clipboard')
             return True
         finally:
@@ -1245,9 +1246,4 @@ if __name__=='__main__':
     app=wx.App(False)
     MainFrame()
     app.MainLoop()
-
-
-
     
-
-
