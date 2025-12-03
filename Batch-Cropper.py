@@ -62,6 +62,13 @@ def build_unique_path(base_dir: Path, prefix: str, ext: str = ".png") -> Path:
         counter += 1
     return file_path
 
+def add_bc_suffix(path: str) -> str:
+    """_bcのみとし既存の連番は除去する"""
+    base, ext = os.path.splitext(path)
+    if base.endswith("_bc"):
+        base = base[:-3]
+    return base + "_bc" + ext
+
 class ThumbnailPanel(wx.Panel):
     """下ペイン：横スクロール可能なサムネイル一覧"""
     def __init__(self, parent, select_callback):
@@ -1140,15 +1147,17 @@ class MainFrame(wx.Frame):
             return
         crop_box = box
         logs = []
+        new_paths = []
+        new_images = []
         for path, img in zip(self.file_paths, self.images):
             try:
                 # ① トリミング
                 trimmed = img.crop(crop_box)
 
                 # ② 保存先と拡張子判定
-                base, ext = os.path.splitext(path)
+                _, ext = os.path.splitext(path)
                 ext_lower = ext.lower()
-                out_path = base + "_trm" + ext_lower
+                out_path = add_bc_suffix(path)
 
                 save_kwargs = {}
 
@@ -1177,19 +1186,26 @@ class MainFrame(wx.Frame):
                 trimmed.save(out_path, **save_kwargs)
 
                 # ④ メモリ内イメージ更新
-                self.images[self.images.index(img)] = trimmed
+                with Image.open(out_path) as reopened:
+                    new_images.append(reopened.copy())
+                new_paths.append(out_path)
                 logs.append(f"{os.path.basename(path)} → OK")
             except Exception as e:
                 logs.append(f"{os.path.basename(path)} → ERROR: {e}")
 
         # 履歴に登録＆UI更新
-        self.PushHistory()
-        self.UpdateUI()
+        if new_images:
+            self.file_paths = new_paths
+            self.images = new_images
+            self.PushHistory()
+            if not (0 <= self.selected_index < len(self.images)):
+                self.selected_index = 0
+            self.UpdateUI()
         # （必要なら logs をファイル出力 or ダイアログ表示）
 
 
     def OnPngReduce(self):
-        """PNG減色を全ファイルに実行し、_min付きで保存後に再読込する"""
+        """PNG reduce for PNG files, save with _bc and reload"""
         if not self.file_paths:
             wx.MessageBox("減色対象のファイルがありません。", "情報", wx.OK | wx.ICON_INFORMATION)
             return
@@ -1211,8 +1227,7 @@ class MainFrame(wx.Frame):
                 if alpha.getextrema() != (255, 255):
                     quantized = quantized.convert("RGBA")
                     quantized.putalpha(alpha)
-                base, ext = os.path.splitext(path)
-                out_path = base + "_min" + ext
+                out_path = add_bc_suffix(path)
                 quantized.save(out_path, optimize=True)
                 with Image.open(out_path) as reopened:
                     new_images.append(reopened.copy())
