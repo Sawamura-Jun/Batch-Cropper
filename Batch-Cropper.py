@@ -1189,8 +1189,46 @@ class MainFrame(wx.Frame):
 
 
     def OnPngReduce(self):
-        """PNG 減色機能のプレースホルダー"""
-        wx.MessageBox("PNG減色はまだ実装されていません。", "情報", wx.OK | wx.ICON_INFORMATION)
+        """PNG減色を全ファイルに実行し、_min付きで保存後に再読込する"""
+        if not self.file_paths:
+            wx.MessageBox("減色対象のファイルがありません。", "情報", wx.OK | wx.ICON_INFORMATION)
+            return
+
+        non_png = [p for p in self.file_paths if os.path.splitext(p)[1].lower() != '.png']
+        if non_png:
+            wx.MessageBox("減色はPNGファイルのみ対応しています。", "情報", wx.OK | wx.ICON_INFORMATION)
+            return
+
+        new_paths = []
+        new_images = []
+        for path, img in zip(self.file_paths, self.images):
+            try:
+                rgba = img.convert("RGBA")
+                alpha = rgba.getchannel("A")
+                rgb = rgba.convert("RGB")
+                quantized = rgb.quantize(colors=256, method=Image.MEDIANCUT, dither=Image.FLOYDSTEINBERG)
+                # アルファがあれば戻す（RGBA保存時は減色効果は控えめだが表示を優先）
+                if alpha.getextrema() != (255, 255):
+                    quantized = quantized.convert("RGBA")
+                    quantized.putalpha(alpha)
+                base, ext = os.path.splitext(path)
+                out_path = base + "_min" + ext
+                quantized.save(out_path, optimize=True)
+                with Image.open(out_path) as reopened:
+                    new_images.append(reopened.copy())
+                new_paths.append(out_path)
+            except Exception as e:
+                wx.LogError(f"減色に失敗しました: {path}: {e}")
+
+        if not new_paths:
+            return
+
+        self.file_paths = new_paths
+        self.images = new_images
+        self.PushHistory()
+        if not (0 <= self.selected_index < len(self.images)):
+            self.selected_index = 0
+        self.UpdateUI()
 
 
     def OnSnapshot(self):
