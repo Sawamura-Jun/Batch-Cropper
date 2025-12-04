@@ -25,7 +25,7 @@ OVERLAY_ALPHA = 100
 
 def resolve_import_dir() -> Path:
     """
-    IMPORT_SAVE_DIR が空または不正ならデスクトップ（無ければホーム）を返す。
+    IMPORT_SAVE_DIR が空なら Pictures/Batch-Cropper（Windows想定）、それ以外は指定を使用。
     """
     base = ""
     if IMPORT_SAVE_DIR is not None:
@@ -38,9 +38,10 @@ def resolve_import_dir() -> Path:
         except Exception:
             target = None
 
-    if target is None:
-        desktop = Path.home() / "Desktop"
-        target = desktop if desktop.exists() else Path.home()
+    if target is None and not base:
+        target = Path.home() / "Pictures" / "Batch-Cropper"
+    elif target is None:
+        target = Path.home()
 
     try:
         target.mkdir(parents=True, exist_ok=True)
