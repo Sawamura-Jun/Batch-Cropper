@@ -646,7 +646,7 @@ class PreviewPanel(wx.Panel):
             data_object = wx.CustomDataObject(wx.DataFormat(wx.DF_PNG))
             data_object.SetData(png_bytes)
             self.clip.SetData(data_object)
-            self.clip.Flush()
+            self.clip.Flush()                   # このコードは必要
             print('Copy to clipboard')
             return True
         finally:
@@ -1136,11 +1136,6 @@ class MainFrame(wx.Frame):
             self.ctrl.textcs['xe'].SetValue(str(xe))
             self.ctrl.textcs['ye'].SetValue(str(ye))
 
-    def PushHistory(self):
-        snap=[img.copy() for img in self.images]
-        self.history.append(snap)
-        if len(self.history)>MAX_HISTORY: self.history.pop(0)
-
     def OnTrimAll(self):
         box = self.ctrl.GetValidatedBox()
         if box is None:
@@ -1272,17 +1267,40 @@ class MainFrame(wx.Frame):
         if len(self.history) < 2:
             # wx.MessageBox("No more history", "Info", wx.OK)
             return
-        # Revert to previous state
+        # 現在の状態を破棄し、前の状態へ戻す
+        current_paths = list(self.file_paths)
         self.history.pop()
         previous = self.history[-1]
-        self.images = [img.copy() for img in previous]
+        prev_paths = previous["paths"]
+        # いまのステップで生成された _bc のみ削除
+        for p in current_paths:
+            base, _ = os.path.splitext(p)
+            if p not in prev_paths and base.endswith("_bc"):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+        # 巻き戻し先が _bc ならファイル内容も復元しておく
+        for p, img in zip(prev_paths, previous["images"]):
+            base, _ = os.path.splitext(p)
+            if base.endswith("_bc"):
+                try:
+                    img.save(p)
+                except Exception:
+                    pass
+        self.file_paths = list(prev_paths)
+        self.images = [img.copy() for img in previous["images"]]
+        if not (0 <= self.selected_index < len(self.images)):
+            self.selected_index = 0
         self.UpdateUI()
 
     def PushHistory(self):
-        # Add current state to history
-        snapshot = [img.copy() for img in self.images]
+        """現在のファイルパスと画像を履歴に保存"""
+        snapshot = {
+            "paths": list(self.file_paths),
+            "images": [img.copy() for img in self.images],
+        }
         self.history.append(snapshot)
-        # Drop oldest when exceeding limit
         if len(self.history) > MAX_HISTORY:
             self.history.pop(0)
 
