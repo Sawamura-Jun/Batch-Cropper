@@ -998,6 +998,7 @@ class MainFrame(wx.Frame):
         self.file_paths=[]
         self.images=[]
         self.history=[]
+        self.reduced_flags=[]
         self.selected_index=-1
         self.splitter=wx.SplitterWindow(self)
         left=wx.Panel(self.splitter)
@@ -1074,6 +1075,7 @@ class MainFrame(wx.Frame):
 
         self.file_paths.append(str(file_path))
         self.images.append(img.copy())
+        self.reduced_flags.append(False)
         self.PushHistory()
         self.selected_index = len(self.images) - 1
         self.UpdateUI()
@@ -1092,6 +1094,7 @@ class MainFrame(wx.Frame):
                     img = Image.open(p)
                     self.file_paths.append(p)
                     self.images.append(img)
+                    self.reduced_flags.append(False)
                 except: wx.LogError(f"読み込み失敗:{p}")
         if self.images:
             self.history.clear()
@@ -1121,6 +1124,9 @@ class MainFrame(wx.Frame):
         if ext in ('.jpg', '.jpeg'):
             wx.MessageBox("容量が増えるためJpeg画像はクリップボードにコピーできません", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
             return
+        if self.reduced_flags and self.reduced_flags[self.selected_index]:
+            wx.MessageBox("減色後のクリップボードへのコピーはできません", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
+            return
 
         if not self.preview.CopyOriginalToClipboard():
             wx.LogWarning('コピー対象のプレビュー画像がありません。')
@@ -1144,6 +1150,7 @@ class MainFrame(wx.Frame):
         logs = []
         new_paths = []
         new_images = []
+        new_flags = []
         for path, img in zip(self.file_paths, self.images):
             try:
                 # ① トリミング
@@ -1184,6 +1191,7 @@ class MainFrame(wx.Frame):
                 with Image.open(out_path) as reopened:
                     new_images.append(reopened.copy())
                 new_paths.append(out_path)
+                new_flags.append(self.reduced_flags[self.file_paths.index(path)])
                 logs.append(f"{os.path.basename(path)} → OK")
             except Exception as e:
                 logs.append(f"{os.path.basename(path)} → ERROR: {e}")
@@ -1192,6 +1200,7 @@ class MainFrame(wx.Frame):
         if new_images:
             self.file_paths = new_paths
             self.images = new_images
+            self.reduced_flags = new_flags
             self.PushHistory()
             if not (0 <= self.selected_index < len(self.images)):
                 self.selected_index = 0
@@ -1212,6 +1221,7 @@ class MainFrame(wx.Frame):
 
         new_paths = []
         new_images = []
+        new_flags = []
         for path, img in zip(self.file_paths, self.images):
             try:
                 rgba = img.convert("RGBA")
@@ -1227,6 +1237,7 @@ class MainFrame(wx.Frame):
                 with Image.open(out_path) as reopened:
                     new_images.append(reopened.copy())
                 new_paths.append(out_path)
+                new_flags.append(True)
             except Exception as e:
                 wx.LogError(f"減色に失敗しました: {path}: {e}")
 
@@ -1235,6 +1246,7 @@ class MainFrame(wx.Frame):
 
         self.file_paths = new_paths
         self.images = new_images
+        self.reduced_flags = new_flags
         self.PushHistory()
         if not (0 <= self.selected_index < len(self.images)):
             self.selected_index = 0
@@ -1259,6 +1271,7 @@ class MainFrame(wx.Frame):
 
         self.file_paths.append(str(file_path))
         self.images.append(screenshot.copy())
+        self.reduced_flags.append(False)
         self.PushHistory()
         self.selected_index = len(self.images) - 1
         self.UpdateUI()
@@ -1290,6 +1303,7 @@ class MainFrame(wx.Frame):
                     pass
         self.file_paths = list(prev_paths)
         self.images = [img.copy() for img in previous["images"]]
+        self.reduced_flags = list(previous.get("flags", [False]*len(self.images)))
         if not (0 <= self.selected_index < len(self.images)):
             self.selected_index = 0
         self.UpdateUI()
@@ -1299,6 +1313,7 @@ class MainFrame(wx.Frame):
         snapshot = {
             "paths": list(self.file_paths),
             "images": [img.copy() for img in self.images],
+            "flags": list(self.reduced_flags),
         }
         self.history.append(snapshot)
         if len(self.history) > MAX_HISTORY:
@@ -1309,6 +1324,7 @@ class MainFrame(wx.Frame):
         self.file_paths.clear()
         self.images.clear()
         self.history.clear()
+        self.reduced_flags.clear()
         self.selected_index = -1
         # プレビューをリセット
         self.preview.current_image = None
