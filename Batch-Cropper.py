@@ -878,7 +878,7 @@ class ControlPanel(wx.Panel):
         b1=wx.Button(self,label="もどる",size=(100,45))
         b1.SetFont(font)
         b1.Bind(wx.EVT_BUTTON,lambda e:main.OnRevertAll())
-        b2=wx.Button(self,label="トリミング",size=(100,45))
+        b2=wx.Button(self,label="トリミング＆保存",size=(100,45))
         b2.SetFont(font)
         b2.Bind(wx.EVT_BUTTON,lambda e:main.OnTrimAll())
         s.Add(b1,0,wx.ALL|wx.EXPAND,10)
@@ -995,7 +995,7 @@ class FileDropTarget(wx.FileDropTarget):
 
 class MainFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None,title="一括トリミング",size=(1200,800))
+        super().__init__(None,title="Batch-Cropper",size=(1200,800))
         self.file_paths=[]
         self.images=[]
         self.history=[]
@@ -1123,10 +1123,10 @@ class MainFrame(wx.Frame):
 
         ext = os.path.splitext(self.file_paths[self.selected_index])[1].lower()
         if ext in ('.jpg', '.jpeg'):
-            wx.MessageBox("容量が増えるためJpeg画像はクリップボードにコピーできません", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox("容量が増えるためJpeg画像はクリップボードにコピーできません\n挿入から画像を取り込んでください", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
             return
         if self.reduced_flags and self.reduced_flags[self.selected_index]:
-            wx.MessageBox("減色後のクリップボードへのコピーはできません", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox("減色後のクリップボードへのコピーは容量低減効果がありません\n挿入から画像を取り込んでください", "コピーを中止しました", wx.OK | wx.ICON_INFORMATION)
             return
 
         if not self.preview.CopyOriginalToClipboard():
