@@ -883,7 +883,7 @@ class ControlPanel(wx.Panel):
         b2.Bind(wx.EVT_BUTTON,lambda e:main.OnTrimAll())
         s.Add(b1,0,wx.ALL|wx.EXPAND,10)
         s.Add(b2,0,wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND,10)
-        b_png_reduce = wx.Button(self, label="PNG減色", size=(100,45))
+        b_png_reduce = wx.Button(self, label="PNG減色＆保存", size=(100,45))
         b_png_reduce.SetFont(font)
         b_png_reduce.Bind(wx.EVT_BUTTON, lambda e: main.OnPngReduce())
         s.Add(b_png_reduce,0,wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND,10)
