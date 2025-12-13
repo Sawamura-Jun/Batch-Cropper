@@ -995,7 +995,7 @@ class FileDropTarget(wx.FileDropTarget):
 
 class MainFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None,title="Batch-Cropper",size=(1200,800))
+        super().__init__(None,title="Batch-Cropper",size=(1200,800))    # 1200,800
         self.file_paths=[]
         self.images=[]
         self.history=[]
@@ -1077,6 +1077,8 @@ class MainFrame(wx.Frame):
         self.file_paths.append(str(file_path))
         self.images.append(img.copy())
         self.reduced_flags.append(False)
+        # 取り込みは加工のUndo対象外にしたいので、ベース状態だけを履歴に残す
+        self.history.clear()
         self.PushHistory()
         self.selected_index = len(self.images) - 1
         self.UpdateUI()
@@ -1273,6 +1275,8 @@ class MainFrame(wx.Frame):
         self.file_paths.append(str(file_path))
         self.images.append(screenshot.copy())
         self.reduced_flags.append(False)
+        # 取り込みは加工のUndo対象外にしたいので、ベース状態だけを履歴に残す
+        self.history.clear()
         self.PushHistory()
         self.selected_index = len(self.images) - 1
         self.UpdateUI()
