@@ -12,6 +12,8 @@ from PIL import Image, ImageOps
 IMPORT_SAVE_DIR = r""
 
 # 定数定義
+APP_WINDOW_SIZE = (1120,800)    # デフォルトサイズ
+WINDOW_RESIZE_SCALE_STEP = 0.1  # ホイールリサイズの刻み幅（スケール比）
 THUMBNAIL_SIZE = (100, 100)
 MAX_HISTORY = 10
 LOG_FILENAME = f"trim_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -995,7 +997,9 @@ class FileDropTarget(wx.FileDropTarget):
 
 class MainFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None,title="Batch-Cropper",size=(1200,800))    # 1200,800
+        super().__init__(None,title="Batch-Cropper",size=APP_WINDOW_SIZE)    
+        self.SetMinSize(APP_WINDOW_SIZE)
+        self._default_aspect = APP_WINDOW_SIZE[0] / APP_WINDOW_SIZE[1]
         self.file_paths=[]
         self.images=[]
         self.history=[]
@@ -1006,6 +1010,7 @@ class MainFrame(wx.Frame):
         right=wx.Panel(self.splitter,size=(RIGHT_PANEL_WIDTH,-1))
         self.splitter.SplitVertically(left,right,sashPosition=1200-RIGHT_PANEL_WIDTH)
         self.Bind(wx.EVT_SIZE,self.OnFrameResize)
+        self.Bind(wx.EVT_MOUSEWHEEL,self.OnMouseWheelResize)
         lv=wx.BoxSizer(wx.VERTICAL)
         self.preview=PreviewPanel(left)
         self.thumbnails=ThumbnailPanel(left,self.OnSelectThumbnail)
@@ -1087,6 +1092,38 @@ class MainFrame(wx.Frame):
         w,h=evt.GetSize()
         self.splitter.SetSashPosition(w-RIGHT_PANEL_WIDTH)
         evt.Skip()
+
+    def _get_current_display_rect(self):
+        """ウィンドウが属するモニターのクライアント領域を返す"""
+        idx = wx.Display.GetFromWindow(self)
+        if idx == wx.NOT_FOUND:
+            idx = 0
+        display = wx.Display(idx)
+        try:
+            return display.GetClientArea()
+        except Exception:
+            w, h = wx.GetDisplaySize()
+            return wx.Rect(0, 0, w, h)
+
+    def OnMouseWheelResize(self, evt):
+        rotation = evt.GetWheelRotation()
+        if rotation == 0:
+            return
+        direction = 1 if rotation > 0 else -1
+        display_rect = self._get_current_display_rect()
+        min_w, min_h = APP_WINDOW_SIZE
+        aspect = self._default_aspect
+        max_w = min(display_rect.width, int(round(display_rect.height * aspect)))
+        max_w = max(min_w, max_w)
+        current_w = self.GetSize().width
+        target_w = current_w * (1 + WINDOW_RESIZE_SCALE_STEP * direction)
+        target_w = max(min_w, min(target_w, max_w))
+        target_w = int(round(target_w))
+        target_h = int(round(target_w / aspect))
+        pos_x = int(display_rect.x + (display_rect.width - target_w) // 2)
+        pos_y = int(display_rect.y + (display_rect.height - target_h) // 2)
+        self.SetSize(wx.Size(target_w, target_h))
+        self.Move(wx.Point(pos_x, pos_y))
 
     def AddFiles(self,paths):
         for p in paths:
