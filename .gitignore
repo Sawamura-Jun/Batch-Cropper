@@ -4,6 +4,7 @@
 # PyInstaller build artifacts
 build/
 dist/
+release/
 
 # PyInstaller spec files
 *.spec
