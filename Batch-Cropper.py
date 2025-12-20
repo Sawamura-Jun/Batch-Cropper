@@ -17,12 +17,31 @@ WINDOW_RESIZE_SCALE_STEP = 0.1  # ホイールリサイズの刻み幅（スケ�
 THUMBNAIL_SIZE = (100, 100)
 MAX_HISTORY = 10
 LOG_FILENAME = f"trim_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+LOG_ENABLED = False
 EDGE_THRESHOLD = 5
 BACK_GROUND_COLOR = wx.Colour(100, 100, 100)
 RIGHT_PANEL_WIDTH = 250
 HANDLE_SIZE = 10
 MIN_CROP_SIZE = 4
 OVERLAY_ALPHA = 100
+
+def _resolve_log_path() -> Path:
+    try:
+        return Path(__file__).with_name(LOG_FILENAME)
+    except Exception:
+        return Path(LOG_FILENAME)
+
+LOG_PATH = _resolve_log_path()
+
+def _log_debug(message: str) -> None:
+    if not LOG_ENABLED:
+        return
+    try:
+        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"{ts} {message}\n")
+    except Exception:
+        pass
 
 
 def resolve_import_dir() -> Path:
@@ -88,12 +107,21 @@ class ThumbnailPanel(wx.Panel):
         self.SetSizer(sizer)
 
     def update_thumbnails(self, images):
+        if not images:
+            self._bitmap_cache.clear()
+        _log_debug(f"THUMBNAIL update start count={len(images)} cache={len(self._bitmap_cache)}")
         self.hbox.Clear(True)
         for idx, img in enumerate(images):
             img_id = id(img)
-            if idx in self._bitmap_cache and self._bitmap_cache[idx][0] == img_id:
-                bmp = self._bitmap_cache[idx][1]
+            cached = self._bitmap_cache.get(idx)
+            if cached and cached[0] == img_id:
+                _log_debug(f"THUMBNAIL hit idx={idx} id={img_id}")
+                bmp = cached[1]
             else:
+                if cached:
+                    _log_debug(f"THUMBNAIL miss idx={idx} id={img_id} cached_id={cached[0]}")
+                else:
+                    _log_debug(f"THUMBNAIL miss idx={idx} id={img_id} cached_id=None")
                 thumb = img.convert('RGB').copy()
                 thumb.thumbnail(THUMBNAIL_SIZE, Image.LANCZOS)
                 w, h = thumb.size
@@ -107,6 +135,7 @@ class ThumbnailPanel(wx.Panel):
         self.hbox.Layout()
         self.scrolled.Layout()
         self.scrolled.FitInside()
+        _log_debug("THUMBNAIL update end")
 
     def OnThumbClick(self, evt):
         # スクロール位置を変えず選択のみ
@@ -1033,6 +1062,7 @@ class MainFrame(wx.Frame):
 
         self.Centre()
         self.Show()
+        _log_debug(f"APP start log={LOG_PATH}")
 
     def _get_clipboard_image(self):
         """クリップボードから画像を取得する。画像が無ければ None。"""
@@ -1143,7 +1173,9 @@ class MainFrame(wx.Frame):
             self.UpdateUI()
 
     def UpdateUI(self):
+        _log_debug(f"UI update selected={self.selected_index} images={len(self.images)}")
         if 0 <= self.selected_index < len(self.images):
+            _log_debug(f"UI current id={id(self.images[self.selected_index])} path={self.file_paths[self.selected_index]}")
             self.preview.SetImage(self.images[self.selected_index])
             box = self.preview.GetCropBox()
             if box:
@@ -1183,6 +1215,7 @@ class MainFrame(wx.Frame):
             self.ctrl.textcs['ye'].SetValue(str(ye))
 
     def OnTrimAll(self):
+        _log_debug("TRIM start")
         box = self.ctrl.GetValidatedBox()
         if box is None:
             return
@@ -1245,6 +1278,7 @@ class MainFrame(wx.Frame):
             if not (0 <= self.selected_index < len(self.images)):
                 self.selected_index = 0
             self.UpdateUI()
+        _log_debug(f"TRIM end new_count={len(new_images)}")
         # （必要なら logs をファイル出力 or ダイアログ表示）
 
 
@@ -1295,6 +1329,7 @@ class MainFrame(wx.Frame):
 
     def OnSnapshot(self):
         """Capture full screen, save it, and load into the tool."""
+        _log_debug("SNAPSHOT start")
         try:
             screenshot = ImageGrab.grab(all_screens=True)
         except Exception as e:
@@ -1310,13 +1345,15 @@ class MainFrame(wx.Frame):
             return
 
         self.file_paths.append(str(file_path))
-        self.images.append(screenshot.copy())
+        img_copy = screenshot.copy()
+        self.images.append(img_copy)
         self.reduced_flags.append(False)
         # 取り込みは加工のUndo対象外にしたいので、ベース状態だけを履歴に残す
         self.history.clear()
         self.PushHistory()
         self.selected_index = len(self.images) - 1
         self.UpdateUI()
+        _log_debug(f"SNAPSHOT added path={file_path} id={id(img_copy)} images={len(self.images)}")
 
     def OnRevertAll(self):
         if len(self.history) < 2:
@@ -1363,6 +1400,7 @@ class MainFrame(wx.Frame):
 
     def OnClearAll(self):
         """読み込んだファイルを破棄して初期状態に戻す"""
+        _log_debug(f"CLEAR start images={len(self.images)} cache={len(self.thumbnails._bitmap_cache)}")
         self.file_paths.clear()
         self.images.clear()
         self.history.clear()
@@ -1374,10 +1412,12 @@ class MainFrame(wx.Frame):
         self.preview.crop_rect = None
         self.preview.Refresh()
         # サムネイルをクリア
+        self.thumbnails._bitmap_cache.clear()
         self.thumbnails.update_thumbnails([])
         # コントロールパネルのテキストボックスを空に
         for tc in self.ctrl.textcs.values():
             tc.SetValue("")
+        _log_debug(f"CLEAR end images={len(self.images)} cache={len(self.thumbnails._bitmap_cache)}")
 
 if __name__=='__main__':
     Image.MAX_IMAGE_PIXELS=None
