@@ -15,6 +15,8 @@ IMPORT_SAVE_DIR = r""
 APP_WINDOW_SIZE = (1120,800)    # デフォルトサイズ
 WINDOW_RESIZE_SCALE_STEP = 0.1  # ホイールリサイズの刻み幅（スケール比）
 THUMBNAIL_SIZE = (100, 100)
+THUMBNAIL_SELECTED_BORDER_COLOR = wx.Colour(255, 0, 0)
+THUMBNAIL_SELECTED_BORDER_WIDTH = 2
 MAX_HISTORY = 10
 LOG_FILENAME = f"trim_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 LOG_ENABLED = False
@@ -97,6 +99,9 @@ class ThumbnailPanel(wx.Panel):
         super().__init__(parent)
         self.select_callback = select_callback
         self._bitmap_cache = {}
+        self._thumb_widgets = []
+        self._image_ids = []
+        self._selected_index = None
         self.scrolled = wx.ScrolledWindow(self, style=wx.HSCROLL)
         self.scrolled.SetScrollRate(5, 5)
         self.scrolled.SetMinSize((-1, THUMBNAIL_SIZE[1] + 10))  # 高さ固定
@@ -106,35 +111,98 @@ class ThumbnailPanel(wx.Panel):
         sizer.Add(self.scrolled, 1, wx.EXPAND)
         self.SetSizer(sizer)
 
-    def update_thumbnails(self, images):
+    def _add_selection_border(self, bmp):
+        width, height = bmp.GetSize()
+        border = THUMBNAIL_SELECTED_BORDER_WIDTH
+        if width <= border or height <= border:
+            return bmp
+        highlighted = wx.Bitmap(width, height)
+        dc = wx.MemoryDC(highlighted)
+        dc.DrawBitmap(bmp, 0, 0, True)
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.SetPen(wx.Pen(THUMBNAIL_SELECTED_BORDER_COLOR, border))
+        inset = max(0, border // 2)
+        dc.DrawRectangle(inset, inset, width - border, height - border)
+        dc.SelectObject(wx.NullBitmap)
+        return highlighted
+
+    def _set_selected_index(self, selected_index):
+        if selected_index is not None:
+            if selected_index < 0 or selected_index >= len(self._thumb_widgets):
+                selected_index = None
+        if selected_index == self._selected_index:
+            return
+        previous_index = self._selected_index
+        self._selected_index = selected_index
+        for idx in (previous_index, selected_index):
+            if idx is None:
+                continue
+            cached = self._bitmap_cache.get(idx)
+            if not cached:
+                continue
+            bmp = cached[1]
+            display_bmp = bmp
+            if idx == selected_index:
+                display_bmp = self._add_selection_border(bmp)
+            self._thumb_widgets[idx].SetBitmap(display_bmp)
+        self.scrolled.Refresh(False)
+
+    def update_thumbnails(self, images, selected_index=None):
+        if selected_index is not None:
+            if selected_index < 0 or selected_index >= len(images):
+                selected_index = None
         if not images:
             self._bitmap_cache.clear()
+            self._thumb_widgets = []
+            self._image_ids = []
+            self._selected_index = None
+            self.hbox.Clear(True)
+            self.hbox.Layout()
+            self.scrolled.Layout()
+            self.scrolled.FitInside()
+            return
         _log_debug(f"THUMBNAIL update start count={len(images)} cache={len(self._bitmap_cache)}")
-        self.hbox.Clear(True)
-        for idx, img in enumerate(images):
-            img_id = id(img)
-            cached = self._bitmap_cache.get(idx)
-            if cached and cached[0] == img_id:
-                _log_debug(f"THUMBNAIL hit idx={idx} id={img_id}")
-                bmp = cached[1]
-            else:
-                if cached:
-                    _log_debug(f"THUMBNAIL miss idx={idx} id={img_id} cached_id={cached[0]}")
-                else:
-                    _log_debug(f"THUMBNAIL miss idx={idx} id={img_id} cached_id=None")
-                thumb = img.convert('RGB').copy()
-                thumb.thumbnail(THUMBNAIL_SIZE, Image.LANCZOS)
-                w, h = thumb.size
-                raw = thumb.convert('RGB').tobytes()
-                bmp = wx.Bitmap.FromBuffer(w, h, raw)
-                self._bitmap_cache[idx] = (img_id, bmp)
-            sb = wx.StaticBitmap(self.scrolled, bitmap=bmp)
-            sb.idx = idx
-            sb.Bind(wx.EVT_LEFT_UP, self.OnThumbClick)
-            self.hbox.Add(sb, 0, wx.ALL, 5)
-        self.hbox.Layout()
-        self.scrolled.Layout()
-        self.scrolled.FitInside()
+        image_ids = [id(img) for img in images]
+        need_rebuild = len(self._thumb_widgets) != len(images) or self._image_ids != image_ids
+        if need_rebuild:
+            self.scrolled.Freeze()
+            try:
+                self.hbox.Clear(True)
+                self._thumb_widgets = []
+                for idx, img in enumerate(images):
+                    img_id = image_ids[idx]
+                    cached = self._bitmap_cache.get(idx)
+                    if cached and cached[0] == img_id:
+                        _log_debug(f"THUMBNAIL hit idx={idx} id={img_id}")
+                        bmp = cached[1]
+                    else:
+                        if cached:
+                            _log_debug(f"THUMBNAIL miss idx={idx} id={img_id} cached_id={cached[0]}")
+                        else:
+                            _log_debug(f"THUMBNAIL miss idx={idx} id={img_id} cached_id=None")
+                        thumb = img.convert('RGB').copy()
+                        thumb.thumbnail(THUMBNAIL_SIZE, Image.LANCZOS)
+                        w, h = thumb.size
+                        raw = thumb.convert('RGB').tobytes()
+                        bmp = wx.Bitmap.FromBuffer(w, h, raw)
+                        self._bitmap_cache[idx] = (img_id, bmp)
+                    display_bmp = bmp
+                    if selected_index is not None and idx == selected_index:
+                        display_bmp = self._add_selection_border(bmp)
+                    sb = wx.StaticBitmap(self.scrolled, bitmap=display_bmp)
+                    sb.idx = idx
+                    sb.Bind(wx.EVT_LEFT_UP, self.OnThumbClick)
+                    self.hbox.Add(sb, 0, wx.ALL, 5)
+                    self._thumb_widgets.append(sb)
+                self._image_ids = image_ids
+                self._selected_index = selected_index
+                self.hbox.Layout()
+                self.scrolled.Layout()
+                self.scrolled.FitInside()
+            finally:
+                self.scrolled.Thaw()
+        else:
+            self._set_selected_index(selected_index)
         _log_debug("THUMBNAIL update end")
 
     def OnThumbClick(self, evt):
@@ -1184,7 +1252,7 @@ class MainFrame(wx.Frame):
                 self.ctrl.textcs['ys'].SetValue(str(ys))
                 self.ctrl.textcs['xe'].SetValue(str(xe))
                 self.ctrl.textcs['ye'].SetValue(str(ye))
-        self.thumbnails.update_thumbnails(self.images)      # このコードは必要
+        self.thumbnails.update_thumbnails(self.images, self.selected_index)      # このコードは必要
 
 
     def OnCopyPreviewOriginal(self, evt):
@@ -1205,14 +1273,7 @@ class MainFrame(wx.Frame):
 
     def OnSelectThumbnail(self, idx):
         self.selected_index = idx
-        self.preview.SetImage(self.images[idx])
-        box = self.preview.GetCropBox()
-        if box:
-            xs, ys, xe, ye = box
-            self.ctrl.textcs['xs'].SetValue(str(xs))
-            self.ctrl.textcs['ys'].SetValue(str(ys))
-            self.ctrl.textcs['xe'].SetValue(str(xe))
-            self.ctrl.textcs['ye'].SetValue(str(ye))
+        self.UpdateUI()
 
     def OnTrimAll(self):
         _log_debug("TRIM start")
