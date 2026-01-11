@@ -990,6 +990,10 @@ class ControlPanel(wx.Panel):
         b3.SetFont(font)
         b3.Bind(wx.EVT_BUTTON, lambda e: main.OnSnapshot())
         s.Add(b3,0,wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND,10)
+        b_clear_selected = wx.Button(self, label="選択画像クリア", size=(100,45))
+        b_clear_selected.SetFont(font)
+        b_clear_selected.Bind(wx.EVT_BUTTON, lambda e: main.OnClearSelected())
+        s.Add(b_clear_selected,0,wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.EXPAND,10)
         # クリアボタン追加
         b4 = wx.Button(self, label="クリア", size=(100,45))
         b4.SetFont(font)
@@ -1458,6 +1462,34 @@ class MainFrame(wx.Frame):
         self.history.append(snapshot)
         if len(self.history) > MAX_HISTORY:
             self.history.pop(0)
+
+    def OnClearSelected(self):
+        """選択中の画像だけをリストから削除する（ファイルは削除しない）"""
+        if not (0 <= self.selected_index < len(self.images)):
+            wx.MessageBox("削除する画像がありません。", "情報", wx.OK | wx.ICON_INFORMATION)
+            return
+        remove_idx = self.selected_index
+        del self.file_paths[remove_idx]
+        del self.images[remove_idx]
+        del self.reduced_flags[remove_idx]
+        if self.images:
+            self.selected_index = min(remove_idx, len(self.images) - 1)
+        else:
+            self.selected_index = -1
+        self.PushHistory()
+        if self.selected_index < 0:
+            # プレビューをリセット
+            self.preview.current_image = None
+            self.preview._cached_bitmap = None
+            self.preview.crop_rect = None
+            self.preview.Refresh()
+            # サムネイルをクリア
+            self.thumbnails.update_thumbnails([])
+            # コントロールパネルのテキストボックスを空に
+            for tc in self.ctrl.textcs.values():
+                tc.SetValue("")
+            return
+        self.UpdateUI()
 
     def OnClearAll(self):
         """読み込んだファイルを破棄して初期状態に戻す"""
