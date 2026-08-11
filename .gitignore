@@ -9,3 +9,16 @@ ico/
 
 # PyInstaller spec files
 *.spec
+
+AGENTS.md
+
+# Python cache / test artifacts
+__pycache__/
+.pytest_cache/
+
+# other
+*.txt
+.gitignore
+
+# tests
+tests/
